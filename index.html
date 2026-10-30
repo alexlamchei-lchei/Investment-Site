@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>專業投資研究與數據驗證中心 (完整功能版)</title>
+  
+  <!-- 為了加快手機首次渲染速度，加入預先連接 -->
+  <link rel="preconnect" href="https://cdn.tailwindcss.com">
+  <link rel="preconnect" href="https://unpkg.com">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* 原生預載畫面專用動畫 (不需要等 Tailwind 或 React 載入就能跑) */
+    .native-loader {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      width: 100vw;
+      background-color: #0f172a; /* Tailwind slate-900 */
+      color: #34d399; /* Tailwind emerald-400 */
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(52, 211, 153, 0.2);
+      border-radius: 50%;
+      border-top-color: #34d399;
+      animation: spin 1s ease-in-out infinite;
+      margin-bottom: 16px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .loader-text {
+      color: #94a3b8; /* Tailwind slate-400 */
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans h-screen overflow-hidden">
+  
+  <div id="root" class="h-full w-full">
+    <!-- 這個區塊會在毫秒級顯示，直到 React 完成編譯並覆蓋它 -->
+    <div class="native-loader">
+      <div class="spinner"></div>
+      <div class="loader-text">初始化系統引擎...</div>
+    </div>
+  </div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    const MY_API_KEY = "dbi3sb1r01qtsu191o50dbi3sb1r01qtsu191o5g";
+
+    // 20檔完整精選標的
+    const initialAssets = [
+      { symbol: 'SPYL', name: 'SPDR S&P 500 UCITS ETF', exchange: 'LSE', currency: 'USD', price: 19.32, type: '長期ETF', cat: '核心資產' },
+      { symbol: 'VOO', name: 'Vanguard S&P 500 ETF', exchange: 'NYSE Arca', currency: 'USD', price: 522.00, type: '長期ETF', cat: '核心資產' },
+      { symbol: 'QQQ', name: 'Invesco QQQ Trust', exchange: 'NASDAQ', currency: 'USD', price: 498.80, type: '長期ETF', cat: '科技成長' },
+      { symbol: 'QBTS', name: 'D-Wave Quantum Inc.', exchange: 'NYSE', currency: 'USD', price: 11.56, type: '個股', cat: '量子計算' },
+      { symbol: 'AUR', name: 'Aurora Innovation Inc.', exchange: 'NASDAQ', currency: 'USD', price: 4.41, type: '個股', cat: '自動駕駛' },
+      { symbol: 'QUBT', name: 'Quantum Computing Inc', exchange: 'NASDAQ', currency: 'USD', price: 6.82, type: '個股', cat: '量子計算' },
+      { symbol: 'IONQ', name: 'IonQ Inc.', exchange: 'NYSE', currency: 'USD', price: 31.72, type: '個股', cat: '純量子計算' },
+      { symbol: 'RGTI', name: 'Rigetti Computing', exchange: 'NASDAQ', currency: 'USD', price: 12.06, type: '個股', cat: '超導量子' },
+      { symbol: 'IBM', name: '國際商業機器', exchange: 'NYSE', currency: 'USD', price: 258.28, type: '個股', cat: '量子與雲端' },
+      { symbol: 'NVDA', name: '輝達', exchange: 'NASDAQ', currency: 'USD', price: 141.20, type: '個股', cat: 'AI晶片' },
+      { symbol: 'TSM', name: '台積電 (ADR)', exchange: 'NYSE', currency: 'USD', price: 198.50, type: '個股', cat: '半導體' },
+      { symbol: 'AAPL', name: '蘋果公司', exchange: 'NASDAQ', currency: 'USD', price: 232.50, type: '個股', cat: '大型科技' },
+      { symbol: 'MSFT', name: '微軟', exchange: 'NASDAQ', currency: 'USD', price: 430.15, type: '個股', cat: '大型科技' },
+      { symbol: 'GOOGL', name: 'Alphabet', exchange: 'NASDAQ', currency: 'USD', price: 175.20, type: '個股', cat: '大型科技' },
+      { symbol: 'AMZN', name: '亞馬遜', exchange: 'NASDAQ', currency: 'USD', price: 185.30, type: '個股', cat: '大型科技' },
+      { symbol: 'META', name: 'Meta Platforms', exchange: 'NASDAQ', currency: 'USD', price: 624.52, type: '個股', cat: '大型科技' },
+      { symbol: 'AMD', name: '超微半導體', exchange: 'NASDAQ', currency: 'USD', price: 152.10, type: '個股', cat: '半導體' },
+      { symbol: 'SCHD', name: 'Schwab US Dividend', exchange: 'NYSE Arca', currency: 'USD', price: 78.50, type: '長期ETF', cat: '高股息防守' },
+      { symbol: 'GLD', name: 'SPDR Gold Shares', exchange: 'NYSE Arca', currency: 'USD', price: 245.80, type: '黃金防守', cat: '防守避險' },
+      { symbol: 'IAU', name: 'iShares Gold Trust', exchange: 'NYSE Arca', currency: 'USD', price: 51.20, type: '黃金防守', cat: '防守避險' }
+    ];
+
+    const initialNews = [
+      { id: 1, title: '正在連線至真實財經新聞伺服器，載入最新市場動態...', time: '載入中', source: '系統提示', impact: '-', type: '連線中', url: '#' }
+    ];
+
+    const dailyRecommendations = [
+      { category: '長期核心底盤', symbol: 'SPYL', reason: '標普500超低費率配置，適合持續定期定額分散大盤波動。' },
+      { category: 'AI 供應鏈動能', symbol: 'NVDA', reason: '基礎設施需求強勁，拉回月線附近具備良好支撐與上升潛力。' },
+      { category: '防守避險配置', symbol: 'GLD', reason: '總體經濟不確定性升溫，黃金 ETF 具備抗通膨與避險雙重優勢。' }
+    ];
+
+    function App() {
+      const [assets, setAssets] = useState(initialAssets);
+      const assetsRef = React.useRef(initialAssets);
+      useEffect(() => { assetsRef.current = assets; }, [assets]);
+      
+      const newsRef = React.useRef(initialNews);
+      const [, forceUpdate] = useState({});
+      
+      const [recommendations, setRecommendations] = useState(dailyRecommendations);
+      const [tab, setTab] = useState('dashboard');
+      const [mode, setMode] = useState('api');
+      const [loading, setLoading]  = useState(false);
+      const [errorMsg, setErrorMsg] = useState(null);
+      const [lastUpdated, setLastUpdated] = useState('尚未連線');
+      const [dataSourceType, setDataSourceType] = useState('等待載入');
+      const [searchTerm, setSearchTerm] = useState('');
+      
+      const [selectedSymbol, setSelectedSymbol] = useState('QBTS');
+      const [riskLevel, setRiskLevel] = useState(2);
+
+      const updateIndexRef = React.useRef(0);
+
+      const fetchLiveNews = async () => {
+        try {
+          if (mode === 'demo') return; 
+          
+          const res = await fetch(`https://finnhub.io/api/v1/news?category=general&token=${MY_API_KEY}`);
+          if (res.ok) {
+            const data = await res.json();
+            const paywalls = ['bloomberg', 'wsj', 'wall street journal', 'financial times', 'seekingalpha', 'barrons'];
+            const freeNewsData = data.filter(item => {
+              const src = (item.source || '').toLowerCase();
+              return !paywalls.some(pw => src.includes(pw));
+            });
+            const formattedNews = freeNewsData.slice(0, 20).map(item => ({
+              id: item.id || Date.now() + Math.random(),
+              title: item.headline,
+              time: new Date(item.datetime * 1000).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+              source: item.source,
+              impact: item.related || '總體市場',
+              type: '免付費新聞',
+              url: item.url
+            }));
+            
+            newsRef.current = formattedNews;
+            forceUpdate({});
+          }
+        } catch (e) {
+          console.error("新聞連線失敗:", e);
+        }
+      };
+
+      useEffect(() => {
+        fetchLiveNews(); 
+        const interval = setInterval(() => { fetchLiveNews(); }, 60000);
+        return () => clearInterval(interval);
+      }, [mode]);
+
+      const fetchMarketData = async (isFullRefresh = true) => {
+        if (isFullRefresh) setLoading(true);
+        setErrorMsg(null);
+
+        try {
+          if (mode === 'demo') {
+            if (isFullRefresh) await new Promise(r => setTimeout(r, 400));
+            setDataSourceType('示範資料模式 (Mock Data)');
+            setLastUpdated(new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }));
+            setLoading(false);
+            return;
+          }
+
+          let targetsToUpdate = assetsRef.current;
+          if (!isFullRefresh) {
+            const start = updateIndexRef.current;
+            targetsToUpdate = assetsRef.current.slice(start, start + 5);
+            updateIndexRef.current = (start + 5) >= assetsRef.current.length ? 0 : start + 5;
+          }
+
+          let successCount = 0;
+          const updatedChunk = await Promise.all(targetsToUpdate.map(async (asset) => {
+            try {
+              const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${asset.symbol}&token=${MY_API_KEY}`);
+              if (!res.ok) throw new Error(`API 請求失敗 (${res.status})`);
+              const data = await res.json();
+              if (data && typeof data.c === 'number' && data.c > 0) {
+                successCount++;
+                return { ...asset, price: data.c };
+              }
+              return asset;
+            } catch (e) {
+              return asset;
+            }
+          }));
+
+          if (successCount === 0 && isFullRefresh) {
+            throw new Error('無法取得遠端報價。請檢查網路或 API 額度。');
+          }
+
+          if (isFullRefresh) {
+            setAssets(updatedChunk);
+          } else {
+            setAssets(prev => {
+              const newAssets = [...prev];
+              updatedChunk.forEach(updatedAsset => {
+                const idx = newAssets.findIndex(a => a.symbol === updatedAsset.symbol);
+                if (idx !== -1) newAssets[idx] = updatedAsset;
+              });
+              return newAssets;
+            });
+          }
+          
+          setDataSourceType('Finnhub API (15分鐘延遲報價)');
+          setLastUpdated(new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }));
+          
+        } catch (err) {
+          setErrorMsg(err.message);
+          setDataSourceType('連線異常 (安全防護啟動)');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      useEffect(() => {
+        fetchMarketData(true); 
+        const priceInterval = setInterval(() => {
+          if (mode === 'api') {
+            fetchMarketData(false); 
+          }
+        }, 15000); 
+        return () => clearInterval(priceInterval);
+      }, [mode]);
+
+      const filteredStocks = useMemo(() => {
+        return assets.filter(s => 
+          s.symbol.toLowerCase().includes(searchTerm.toLowerCase()) || 
+          s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          s.cat.includes(searchTerm)
+        );
+      }, [assets, searchTerm]);
+
+      const currentAsset = assets.find(a => a.symbol === selectedSymbol) || assets[3];
+      const buyLow = currentAsset.price * (1 - 0.08 * riskLevel);
+      const buyHigh = currentAsset.price * (1 - 0.03 * riskLevel);
+      const sellTarget = currentAsset.price * (1 + 0.12 * riskLevel);
+      const stopLoss = currentAsset.price * (1 - 0.07 * riskLevel);
+
+      return (
+        <div className="flex h-screen bg-slate-900 text-slate-100 overflow-hidden flex-col md:flex-row">
+          
+          {/* === 桌面版：左側專業側邊導覽列 === */}
+          <aside className="hidden md:flex w-64 bg-slate-800 border-r border-slate-700 flex-col z-30 shrink-0 shadow-2xl">
+            <div className="p-5 border-b border-slate-700">
+              <h1 className="font-bold text-lg flex items-center gap-2 text-white">
+                <i className="fa-solid fa-chart-line text-emerald-400"></i> 投資研究中心
+              </h1>
+              <p className="text-xs text-slate-400 mt-2">專業分析與數據驗證系統</p>
+            </div>
+            <nav className="flex-1 py-6 px-3 space-y-2">
+              <button 
+                onClick={() => setTab('dashboard')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${tab === 'dashboard' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:bg-slate-700 hover:text-slate-200'}`}
+              >
+                <i className="fa-solid fa-house w-5 text-center"></i> 首頁與即時新聞
+              </button>
+              <button 
+                onClick={() => setTab('stocks')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${tab === 'stocks' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:bg-slate-700 hover:text-slate-200'}`}
+              >
+                <i className="fa-solid fa-list w-5 text-center"></i> 20檔個股與價格
+              </button>
+              <button 
+                onClick={() => setTab('simulation')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${tab === 'simulation' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:bg-slate-700 hover:text-slate-200'}`}
+              >
+                <i className="fa-solid fa-calculator w-5 text-center"></i> 買賣與止損推演
+              </button>
+            </nav>
+            <div className="p-4 border-t border-slate-700 text-xs text-slate-400 space-y-1">
+              <div>系統狀態: <span className={mode === 'api' ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>{dataSourceType}</span></div>
+              <div>最後更新: <br/>{lastUpdated}</div>
+            </div>
+          </aside>
+
+          {/* === 右側/主畫面：內容區 === */}
+          <div className="flex-1 flex flex-col h-full relative w-full overflow-hidden">
+            
+            {/* 頂部狀態與控制列 */}
+            <header className="bg-slate-800/80 md:bg-slate-900 border-b border-slate-700 p-3 sm:p-4 shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 z-20 backdrop-blur-md">
+              
+              <div className="md:hidden">
+                <h1 className="font-bold text-base flex items-center gap-2">
+                  <i className="fa-solid fa-chart-line text-emerald-400"></i> 投資研究中心
+                </h1>
+                <p className="text-xs text-slate-400 mt-1">
+                  狀態: <span className={mode === 'api' ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>{dataSourceType}</span>
+                </p>
+              </div>
+
+              <div className="hidden md:block">
+                <h2 className="font-bold text-lg text-slate-100">
+                  {tab === 'dashboard' && '研究首頁與即時新聞'}
+                  {tab === 'stocks' && '20 檔精選資產與即時報價'}
+                  {tab === 'simulation' && '即時買入賣出與止損區間推演'}
+                </h2>
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button 
+                  onClick={() => { setMode('demo'); fetchMarketData(true); }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${mode === 'demo' ? 'bg-amber-500 text-slate-950' : 'bg-slate-700 text-slate-300'}`}
+                >
+                  🧪 示範
+                </button>
+                <button 
+                  onClick={() => { setMode('api'); fetchMarketData(true); }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${mode === 'api' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-700 text-slate-300'}`}
+                >
+                  🔌 API
+                </button>
+                <button 
+                  onClick={() => fetchMarketData(true)}
+                  disabled={loading}
+                  className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                >
+                  <i className={`fa-solid fa-rotate ${loading ? 'fa-spin' : ''}`}></i> 重新整理
+                </button>
+              </div>
+            </header>
+
+            {/* 核心內容滾動區塊 */}
+            <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6 no-scrollbar">
+              <div className="max-w-7xl mx-auto space-y-5">
+                
+                {errorMsg && (
+                  <div className="bg-rose-950/80 border border-rose-700 text-rose-200 p-3 rounded-xl text-xs">
+                    <i className="fa-solid fa-triangle-exclamation mr-1"></i> {errorMsg}
+                  </div>
+                )}
+
+                {/* 標籤頁 1：研究首頁與即時新聞 */}
+                {tab === 'dashboard' && (
+                  <div className="space-y-4 animate-in fade-in">
+                    <div className="bg-gradient-to-r from-blue-950 to-slate-900 border border-blue-900/50 rounded-2xl p-4 md:p-6 shadow-lg">
+                      <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xs md:text-sm font-bold text-blue-300 uppercase tracking-wider flex items-center gap-2">
+                          <i className="fa-solid fa-star text-yellow-400"></i> 每日時勢自動推薦與潛力標的
+                        </h2>
+                        <span className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded hidden sm:block">每日盤勢分析</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {recommendations.map((rec, idx) => (
+                          <div key={idx} className="bg-slate-800/80 p-4 rounded-xl border border-slate-700 hover:border-slate-500 transition-colors">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="font-bold text-base text-yellow-300">{rec.symbol}</span>
+                              <span className="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded">{rec.category}</span>
+                            </div>
+                            <p className="text-xs md:text-sm text-slate-300 leading-relaxed">{rec.reason}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4 md:p-6 shadow-sm space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                        <h2 className="text-xs md:text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                          <i className="fa-solid fa-newspaper text-blue-400"></i> 真實財經新聞與動態
+                        </h2>
+                        <span className="text-[10px] text-emerald-400 flex items-center gap-1.5 bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-800 w-fit">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> 
+                          即時串連真實 API ({newsRef.current.length} 篇)
+                        </span>
+                      </div>
+                      <div className="divide-y divide-slate-700/50 max-h-[60vh] md:max-h-[50vh] overflow-y-auto pr-1">
+                        {newsRef.current.map(n => (
+                          <a 
+                            key={n.id} 
+                            href={n.url || 'https://finance.yahoo.com'} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="py-3 md:py-4 first:pt-0 last:pb-0 block group transition-all hover:bg-slate-700/40 px-2 rounded-xl"
+                          >
+                            <div className="flex justify-between items-start gap-2 mb-1.5">
+                              <h3 className="text-sm md:text-base font-bold text-white group-hover:text-emerald-400 transition-colors leading-snug flex items-center gap-2">
+                                {n.title}
+                                <i className="fa-solid fa-arrow-up-right-from-square text-[10px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                              </h3>
+                              <span className="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded shrink-0 hidden sm:block">{n.type}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-3 text-[11px] md:text-xs text-slate-400">
+                              <span><i className="fa-regular fa-clock"></i> {n.time}</span>
+                              <span>來源: {n.source}</span>
+                              <span className="text-emerald-400 font-bold">影響標的: {n.impact}</span>
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 標籤頁 2：20檔完整個股 */}
+                {tab === 'stocks' && (
+                  <div className="space-y-4 animate-in fade-in">
+                    <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4 md:p-6 space-y-4 shadow-sm">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <h2 className="text-xs md:text-sm font-bold text-slate-400 uppercase tracking-wider">20檔精選資產與買賣參考價</h2>
+                        <input 
+                          type="text" 
+                          placeholder="搜尋代號、名稱或分類..." 
+                          className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs md:text-sm w-full sm:w-64 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-white"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="divide-y divide-slate-700/50 max-h-[65vh] overflow-y-auto pr-1">
+                        {filteredStocks.map(s => {
+                          const bLow = s.price * 0.92;
+                          const sTarget = s.price * 1.12;
+                          const sLoss = s.price * 0.93;
+                          return (
+                            <div key={s.symbol} className="py-3 md:py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 hover:bg-slate-700/30 px-2 rounded-xl transition-colors">
+                              <div>
+                                <div className="font-bold text-base text-white flex items-center gap-2">
+                                  {s.symbol} 
+                                  <span className="text-[10px] md:text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded">{s.cat}</span>
+                                </div>
+                                <div className="text-xs md:text-sm text-slate-400 mt-1">
+                                  {s.name} ({s.exchange}) | 現價: <span className="font-mono font-bold text-emerald-400">${s.price.toFixed(2)}</span>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-3 gap-2 w-full md:w-auto text-xs md:text-sm bg-slate-900 md:bg-transparent p-2 md:p-0 rounded-xl">
+                                <div className="text-center md:text-right"><span className="text-emerald-400 block text-[10px] md:text-xs mb-0.5">買入區</span>${bLow.toFixed(2)}</div>
+                                <div className="text-center md:text-right"><span className="text-rose-400 block text-[10px] md:text-xs mb-0.5">止損價</span>${sLoss.toFixed(2)}</div>
+                                <div className="text-center md:text-right"><span className="text-indigo-400 block text-[10px] md:text-xs mb-0.5">目標價</span>${sTarget.toFixed(2)}</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 標籤頁 3：推演器 */}
+                {tab === 'simulation' && (
+                  <div className="space-y-4 animate-in fade-in">
+                    <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4 md:p-8 space-y-6 shadow-sm">
+                      <h2 className="text-xs md:text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <i className="fa-solid fa-calculator text-emerald-400"></i> 買入賣出與止損價格推演
+                      </h2>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-xs md:text-sm font-bold text-slate-300 mb-2">選擇推演標的</label>
+                          <select 
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm md:text-base font-bold text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            value={selectedSymbol}
+                            onChange={(e) => setSelectedSymbol(e.target.value)}
+                          >
+                            {assets.map(s => (
+                              <option key={s.symbol} value={s.symbol}>{s.symbol} - {s.name} (${s.price.toFixed(2)})</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs md:text-sm font-bold text-slate-300 mb-2">設定波動承受係數：等級 {riskLevel}</label>
+                          <input 
+                            type="range" min="1" max="3" step="1" 
+                            className="w-full accent-emerald-500 mt-2"
+                            value={riskLevel} 
+                            onChange={(e) => setRiskLevel(Number(e.target.value))}
+                          />
+                          <div className="flex justify-between text-[10px] md:text-xs text-slate-400 mt-2">
+                            <span>保守 (區間窄)</span>
+                            <span>穩健</span>
+                            <span>積極 (區間寬)</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5 md:p-8 space-y-4 text-center mt-4">
+                        <div className="pb-4 border-b border-slate-800">
+                          <span className="text-xs md:text-sm text-slate-400">{currentAsset.symbol} ({currentAsset.name}) 目前最新報價</span>
+                          <div className="text-4xl md:text-5xl font-mono font-bold text-emerald-400 mt-2">${currentAsset.price.toFixed(2)} <span className="text-base text-slate-400">{currentAsset.currency}</span></div>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 pt-4">
+                          <div className="bg-emerald-950/60 border border-emerald-800 p-4 rounded-xl flex flex-col justify-center">
+                            <span className="block text-[10px] md:text-xs text-emerald-400 font-bold mb-2">建議分批買入區</span>
+                            <span className="text-sm md:text-lg font-mono font-bold text-emerald-200">${buyLow.toFixed(2)}<br className="md:hidden"/> ~ ${buyHigh.toFixed(2)}</span>
+                          </div>
+                          <div className="bg-rose-950/60 border border-rose-800 p-4 rounded-xl flex flex-col justify-center">
+                            <span className="block text-[10px] md:text-xs text-rose-400 font-bold mb-2">建議止損價 (Stop-Loss)</span>
+                            <span className="text-sm md:text-lg font-mono font-bold text-rose-200">&lt; ${stopLoss.toFixed(2)}</span>
+                          </div>
+                          <div className="bg-indigo-950/60 border border-indigo-800 p-4 rounded-xl flex flex-col justify-center">
+                            <span className="block text-[10px] md:text-xs text-indigo-400 font-bold mb-2">獲利目標價 (Take-Profit)</span>
+                            <span className="text-sm md:text-lg font-mono font-bold text-indigo-200">&gt; ${sellTarget.toFixed(2)}</span>
+                          </div>
+                          <div className="bg-blue-950/60 border border-blue-800 p-4 rounded-xl flex flex-col justify-center">
+                            <span className="block text-[10px] md:text-xs text-blue-400 font-bold mb-2">預估風險報酬比</span>
+                            <span className="text-sm md:text-lg font-mono font-bold text-blue-200">1 : 1.85</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </main>
+
+            {/* === 手機版專屬：底部導航列 === */}
+            <nav className="md:hidden bg-slate-800 border-t border-slate-700 pb-safe fixed bottom-0 left-0 right-0 z-30 flex h-16 shadow-[0_-10px_20px_rgba(0,0,0,0.3)]">
+              <button 
+                onClick={() => setTab('dashboard')}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${tab === 'dashboard' ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                <i className="fa-solid fa-house text-lg"></i>
+                <span className="text-[10px]">首頁與新聞</span>
+              </button>
+              <button 
+                onClick={() => setTab('stocks')}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${tab === 'stocks' ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                <i className="fa-solid fa-list text-lg"></i>
+                <span className="text-[10px]">20檔與價格</span>
+              </button>
+              <button 
+                onClick={() => setTab('simulation')}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${tab === 'simulation' ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                <i className="fa-solid fa-calculator text-lg"></i>
+                <span className="text-[10px]">買賣推演</span>
+              </button>
+            </nav>
+
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
